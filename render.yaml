@@ -1,0 +1,51 @@
+services:
+  # 1. The API Service
+  - type: web
+    name: lighthouse-api
+    env: node
+    plan: free
+    buildCommand: npm install && npx prisma generate && npm run build -w api
+    startCommand: npm run start -w api
+    envVars:
+      - key: NODE_VERSION
+        value: 20.10.0
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: REDIS_PASSWORD
+        sync: false
+
+  # 2. The Worker Service
+  - type: worker
+    name: lighthouse-worker
+    env: docker
+    plan: free
+    dockerContext: .
+    dockerfilePath: ./worker/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: REDIS_PASSWORD
+        sync: false
+
+  # 3. The Frontend (Static Site)
+  - type: web
+    name: lighthouse-web
+    env: static
+    plan: free
+    buildCommand: npm install && npm run build -w web
+    staticPublishPath: ./web/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: lighthouse-api
+          property: url
+

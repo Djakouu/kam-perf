@@ -1,0 +1,13 @@
+[
+  {
+    "name": "Kameleoon",
+    "domains": [
+      "*.kameleoon.com",
+      "*.kameleoon.eu",
+      "*.kameleoon.io",
+      "kameleoon.com"
+    ],
+    "homepage": "https://www.kameleoon.com",
+    "categories": ["analytics", "optimization"]
+  }
+]

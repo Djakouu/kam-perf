@@ -1,0 +1,90 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id        String   @id @default(uuid())
+  name      String
+  country   String   // FR, UK, US, DE, RU
+  tamName   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  domains   Domain[]
+  comments  Comment[] // Comments specific to the account
+}
+
+model Domain {
+  id        String   @id @default(uuid())
+  name      String
+  sitecode  String?
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  pages     Page[]
+  comments  Comment[]
+  
+  @@index([accountId])
+}
+
+model Page {
+  id        String   @id @default(uuid())
+  url       String
+  sitecode  String?  // Overrides domain sitecode if present
+  domainId  String
+  domain    Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  analyses  DailyAnalysis[]
+  comments  Comment[]
+
+  @@index([domainId])
+}
+
+model DailyAnalysis {
+  id            String   @id @default(uuid())
+  pageId        String
+  page          Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  
+  date          DateTime @db.Date // YYYY-MM-DD
+  tool          ToolType // KAMELEOON or AB_TASTY
+  
+  desktopCpuAvg Float    // In milliseconds
+  mobileCpuAvg  Float    // In milliseconds
+  
+  runCount      Int      // Number of runs averaged (e.g., 5)
+  createdAt     DateTime @default(now())
+
+  @@unique([pageId, date, tool]) // One analysis per tool per page per day
+  @@index([date])
+}
+
+model Comment {
+  id          String      @id @default(uuid())
+  text        String
+  date        DateTime    @db.Date
+  
+  // Polymorphic-style relations (optional fields)
+  accountId   String?
+  account     Account?    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  domainId    String?
+  domain      Domain?     @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  
+  pageId      String?
+  page        Page?       @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime    @default(now())
+}
+
+enum ToolType {
+  KAMELEOON
+  AB_TASTY
+}

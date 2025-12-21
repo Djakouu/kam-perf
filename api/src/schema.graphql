@@ -1,0 +1,180 @@
+scalar Date
+
+type Query {
+  # Fetch the full hierarchy for the dashboard
+  # Can filter by date range, country, TAM, etc.
+  getHierarchy(filters: FilterInput): [Account!]!
+
+  # Fetch history for charts
+  getHistory(
+    entityId: ID!
+    entityType: EntityType!
+    tool: ToolType!
+    dateRange: DateRangeInput
+  ): [HistoryPoint!]!
+
+  # Check job status
+  getJobStatus(jobId: ID!): JobProgress
+}
+
+type Mutation {
+  # Account CRUD
+  createAccount(input: CreateAccountInput!): Account!
+  updateAccount(id: ID!, input: UpdateAccountInput!): Account!
+  deleteAccount(id: ID!): Boolean!
+
+  # Domain CRUD
+  createDomain(input: CreateDomainInput!): Domain!
+  updateDomain(id: ID!, input: UpdateDomainInput!): Domain!
+  deleteDomain(id: ID!): Boolean!
+
+  # Page CRUD
+  createPage(input: CreatePageInput!): Page!
+  updatePage(id: ID!, input: UpdatePageInput!): Page!
+  deletePage(id: ID!): Boolean!
+
+  # Analysis
+  triggerAnalysis(pageId: ID!, tool: ToolType!): JobStatus!
+  cancelAnalysis(jobId: ID!): Boolean!
+
+  # Comments
+  addComment(input: AddCommentInput!): Comment!
+  deleteComment(id: ID!): Boolean!
+}
+
+# --- Types ---
+
+type Account {
+  id: ID!
+  name: String!
+  country: String!
+  tamName: String
+  domains: [Domain!]!
+  
+  # Aggregated stats for the dashboard view (latest available day)
+  stats(tool: ToolType!): AggregatedStats
+}
+
+type Domain {
+  id: ID!
+  name: String!
+  sitecode: String
+  selfHostingUrl: String
+  cookieConsentCode: String
+  pages: [Page!]!
+  
+  # Aggregated stats
+  stats(tool: ToolType!): AggregatedStats
+}
+
+type Page {
+  id: ID!
+  url: String!
+  sitecode: String
+  
+  # Latest stats
+  stats(tool: ToolType!): AggregatedStats
+}
+
+type AggregatedStats {
+  date: Date!
+  desktopCpuAvg: Float!
+  mobileCpuAvg: Float!
+}
+
+type HistoryPoint {
+  date: Date!
+  desktopCpuAvg: Float!
+  mobileCpuAvg: Float!
+  comment: Comment
+}
+
+type Comment {
+  id: ID!
+  text: String!
+  date: Date!
+}
+
+type JobStatus {
+  jobId: ID!
+  status: String! # queued, processing
+}
+
+type JobProgress {
+  jobId: ID!
+  status: String!
+  progress: Int!
+  failedReason: String
+  message: String
+}
+
+# --- Inputs ---
+
+input FilterInput {
+  dateRange: DateRangeInput
+  country: String
+  tamName: String
+  sitecode: String
+  minCpu: Float
+  maxCpu: Float
+}
+
+input DateRangeInput {
+  start: Date!
+  end: Date!
+}
+
+input CreateAccountInput {
+  name: String!
+  country: String!
+  tamName: String
+}
+
+input UpdateAccountInput {
+  name: String
+  country: String
+  tamName: String
+}
+
+input CreateDomainInput {
+  accountId: ID!
+  name: String!
+  sitecode: String
+  selfHostingUrl: String
+  cookieConsentCode: String
+}
+
+input UpdateDomainInput {
+  name: String
+  sitecode: String
+  selfHostingUrl: String
+  cookieConsentCode: String
+}
+
+input CreatePageInput {
+  domainId: ID!
+  url: String!
+  sitecode: String
+}
+
+input UpdatePageInput {
+  url: String
+  sitecode: String
+}
+
+input AddCommentInput {
+  entityId: ID!
+  entityType: EntityType!
+  date: Date!
+  text: String!
+}
+
+enum EntityType {
+  ACCOUNT
+  DOMAIN
+  PAGE
+}
+
+enum ToolType {
+  KAMELEOON
+}
