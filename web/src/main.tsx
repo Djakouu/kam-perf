@@ -5,8 +5,11 @@ import './index.css'
 import { ApolloClient, InMemoryCache, ApolloProvider } from '@apollo/client';
 import { AnalysisProvider } from './context/AnalysisContext';
 
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/';
+const uri = apiUrl.startsWith('http') ? apiUrl : `https://${apiUrl}`;
+
 const client = new ApolloClient({
-  uri: import.meta.env.VITE_API_URL || 'http://localhost:4000/',
+  uri,
   cache: new InMemoryCache(),
 });
 

@@ -47,5 +47,5 @@ services:
         fromService:
           type: web
           name: lighthouse-api
-          property: url
+          property: host
 
