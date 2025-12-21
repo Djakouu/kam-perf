@@ -15,7 +15,7 @@ const analysisQueue = new Queue('lighthouse-analysis', {
         port: parseInt(process.env.REDIS_PORT || '6379'),
         password: process.env.REDIS_PASSWORD
     }
-});
+} as any);
 
 const typeDefs = readFileSync(path.join(__dirname, 'schema.graphql'), { encoding: 'utf-8' });
 

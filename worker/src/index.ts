@@ -203,6 +203,6 @@ const worker = new Worker('lighthouse-analysis', async job => {
         port: parseInt(process.env.REDIS_PORT || '6379'),
         password: process.env.REDIS_PASSWORD,
     }
-});
+} as any);
 
 console.log('Worker started...');
