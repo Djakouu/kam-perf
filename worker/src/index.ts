@@ -197,7 +197,10 @@ const worker = new Worker('lighthouse-analysis', async job => {
     }
 }, {
     connection: process.env.REDIS_URL ? {
-        url: process.env.REDIS_URL
+        url: process.env.REDIS_URL,
+        tls: {
+            rejectUnauthorized: false
+        }
     } : {
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379'),
