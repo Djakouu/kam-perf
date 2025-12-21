@@ -33,13 +33,14 @@ services:
           name: lighthouse-redis
           property: connectionString
 
-  # 2. The Worker Service
-  - type: worker
+  # 2. The Worker Service (Running as Web Service to bypass plan limits)
+  - type: web
     name: lighthouse-worker
     env: docker
     plan: free
     dockerContext: .
     dockerfilePath: ./worker/Dockerfile
+    startCommand: npm run start -w worker
     envVars:
       - key: DATABASE_URL
         sync: false
