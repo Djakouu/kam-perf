@@ -27,11 +27,11 @@ services:
           type: redis
           name: lighthouse-redis
           property: port
-      - key: REDIS_PASSWORD
+      - key: REDIS_URL
         fromService:
           type: redis
           name: lighthouse-redis
-          property: password
+          property: connectionString
 
   # 2. The Worker Service
   - type: worker
@@ -53,11 +53,11 @@ services:
           type: redis
           name: lighthouse-redis
           property: port
-      - key: REDIS_PASSWORD
+      - key: REDIS_URL
         fromService:
           type: redis
           name: lighthouse-redis
-          property: password
+          property: connectionString
 
   # 3. The Frontend (Static Site)
   - type: web

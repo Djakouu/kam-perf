@@ -8,7 +8,9 @@ import path from 'path';
 
 const prisma = new PrismaClient();
 const analysisQueue = new Queue('lighthouse-analysis', {
-    connection: {
+    connection: process.env.REDIS_URL ? {
+        url: process.env.REDIS_URL
+    } : {
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379'),
         password: process.env.REDIS_PASSWORD
