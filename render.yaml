@@ -1,4 +1,10 @@
 services:
+  # 0. Redis (Cache/Queue)
+  - type: redis
+    name: lighthouse-redis
+    plan: free
+    ipAllowList: [] # Only allow internal connections
+
   # 1. The API Service
   - type: web
     name: lighthouse-api
@@ -12,11 +18,20 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: REDIS_HOST
-        sync: false
+        fromService:
+          type: redis
+          name: lighthouse-redis
+          property: host
       - key: REDIS_PORT
-        sync: false
+        fromService:
+          type: redis
+          name: lighthouse-redis
+          property: port
       - key: REDIS_PASSWORD
-        sync: false
+        fromService:
+          type: redis
+          name: lighthouse-redis
+          property: password
 
   # 2. The Worker Service
   - type: worker
@@ -29,11 +44,20 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: REDIS_HOST
-        sync: false
+        fromService:
+          type: redis
+          name: lighthouse-redis
+          property: host
       - key: REDIS_PORT
-        sync: false
+        fromService:
+          type: redis
+          name: lighthouse-redis
+          property: port
       - key: REDIS_PASSWORD
-        sync: false
+        fromService:
+          type: redis
+          name: lighthouse-redis
+          property: password
 
   # 3. The Frontend (Static Site)
   - type: web
