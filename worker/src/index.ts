@@ -198,9 +198,8 @@ const worker = new Worker('lighthouse-analysis', async job => {
 }, {
     connection: process.env.REDIS_URL ? {
         url: process.env.REDIS_URL,
-        tls: {
-            rejectUnauthorized: false
-        }
+        // Render Redis (internal) does NOT use TLS by default for internal connections
+        // Only external connections use TLS.
     } : {
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379'),
