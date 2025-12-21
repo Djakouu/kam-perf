@@ -17,7 +17,7 @@ const analysisQueue = new Queue('lighthouse-analysis', {
     }
 } as any);
 
-const typeDefs = readFileSync(path.join(__dirname, 'schema.graphql'), { encoding: 'utf-8' });
+const typeDefs = readFileSync(path.join(__dirname, '../src/schema.graphql'), { encoding: 'utf-8' });
 
 const resolvers = {
   Query: {
