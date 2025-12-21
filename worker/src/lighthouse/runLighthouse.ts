@@ -4,7 +4,14 @@ import puppeteer from 'puppeteer';
 export async function launchChrome() {
   const dynamicImport = new Function('specifier', 'return import(specifier)');
   const chromeLauncher = await dynamicImport('chrome-launcher');
-  return await chromeLauncher.launch({ chromeFlags: ['--headless'] });
+  return await chromeLauncher.launch({ 
+    chromeFlags: [
+      '--headless',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage'
+    ] 
+  });
 }
 
 export async function runLighthouse(url: string, formFactor: 'mobile' | 'desktop' = 'mobile', port?: number, scriptUrl?: string, cookieConsentCode?: string) {
