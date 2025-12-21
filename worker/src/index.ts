@@ -4,6 +4,16 @@ import { PrismaClient } from '@prisma/client';
 import { runLighthouse, launchChrome } from './lighthouse/runLighthouse';
 import { parseBootupTime } from './lighthouse/parseBootupTime';
 import { mapScriptsToEntities } from './lighthouse/mapScriptsToEntities';
+import http from 'http';
+
+// Start a dummy HTTP server to satisfy Render's port requirement
+const port = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('Worker is running');
+}).listen(port, () => {
+    console.log(`Worker health check server listening on port ${port}`);
+});
 
 const prisma = new PrismaClient();
 
@@ -197,9 +207,8 @@ const worker = new Worker('lighthouse-analysis', async job => {
     }
 }, {
     connection: process.env.REDIS_URL ? {
-        url: process.env.REDIS_URL,
-        // Render Redis (internal) does NOT use TLS by default for internal connections
-        // Only external connections use TLS.
+        host: process.env.REDIS_HOST,
+        port: parseInt(process.env.REDIS_PORT || '6379'),
     } : {
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379'),
