@@ -1,7 +1,6 @@
 import React from 'react';
-import { LayoutDashboard, FileText, BarChart3, Lock } from 'lucide-react';
+import { LayoutDashboard, FileText, BarChart3 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { Tooltip } from '../ui/Tooltip';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 interface LayoutProps {

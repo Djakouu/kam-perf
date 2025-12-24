@@ -13,9 +13,10 @@ interface SelectProps {
   options: Option[];
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
-export function Select({ value, onChange, options, placeholder = 'Select...', className }: SelectProps) {
+export function Select({ value, onChange, options, placeholder = 'Select...', className, disabled }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -36,11 +37,13 @@ export function Select({ value, onChange, options, placeholder = 'Select...', cl
     <div className={cn("relative", className)} ref={containerRef}>
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
         className={cn(
           "w-full flex items-center justify-between px-3 py-2 text-sm bg-white border rounded-md transition-all duration-200",
           isOpen ? "border-primary-500 ring-2 ring-primary-100" : "border-neutral-200 hover:border-neutral-300",
-          !value && "text-neutral-400"
+          !value && "text-neutral-400",
+          disabled && "opacity-50 cursor-not-allowed bg-neutral-50"
         )}
       >
         <span className="truncate">

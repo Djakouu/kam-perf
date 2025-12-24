@@ -1,7 +1,6 @@
 
 
 import { useQuery, gql } from '@apollo/client';
-import { useEffect, useState } from 'react';
 
 const GET_SCHEDULER_METRICS = gql`
   query GetSchedulerMetrics {
@@ -18,7 +17,7 @@ const GET_SCHEDULER_METRICS = gql`
 interface HeaderProps {}
 
 export function Header({}: HeaderProps) {
-  const { data, startPolling, stopPolling } = useQuery(GET_SCHEDULER_METRICS, {
+  const { data } = useQuery(GET_SCHEDULER_METRICS, {
     pollInterval: 10000, // Poll every 10s
   });
 
