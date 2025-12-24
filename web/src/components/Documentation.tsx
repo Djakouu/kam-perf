@@ -28,7 +28,11 @@ export function Documentation() {
                         <ul className="list-disc list-inside space-y-2 text-neutral-600 ml-4">
                             <li><strong>Accounts:</strong> Create an account for each customer.</li>
                             <li><strong>Domains:</strong> Inside an account, add domains (projects) corresponding to each site code.</li>
-                            <li><strong>Pages:</strong> For each domain, add specific pages to analyze. We recommend adding at least <strong>5 pages</strong> per domain as impact can vary significantly between pages.</li>
+                            <li>
+                                <strong>Pages:</strong> For each domain, add specific pages to analyze. We recommend adding at least <strong>5 different page types</strong> (e.g., Homepage, Product Page, Category Page, Cart, Payment) to get a representative average.
+                                <br />
+                                <em>Note: Ensure these pages are accessible in Incognito mode without redirection or errors.</em>
+                            </li>
                         </ul>
                     </section>
 

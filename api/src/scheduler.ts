@@ -41,10 +41,13 @@ export class Scheduler {
         return;
       }
 
+      /* 
+      // Temporarily disabled time window check to allow immediate scheduling for testing
       if (!this.isWithinTimeWindow()) {
         console.log('[Scheduler] Outside of allowed time window (00:00-09:00 FR time or Weekend). Skipping.');
         return;
       }
+      */
 
       await this.scheduleBatch();
 

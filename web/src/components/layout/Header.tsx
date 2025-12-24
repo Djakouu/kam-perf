@@ -47,7 +47,7 @@ export function Header({}: HeaderProps) {
                </div>
                {hasActivity && (
                  <div className="text-neutral-500">
-                    ~{(metrics.waiting * 2)} min remaining
+                    ~{((metrics.waiting + metrics.active) * 8)} min remaining
                  </div>
                )}
             </div>
