@@ -28,6 +28,8 @@ model Domain {
   sitecode  String?
   selfHostingUrl String?
   cookieConsentCode String?
+  consentStrategy String? // "REQUIRED" | "NOT_REQUIRED"
+  createdAt DateTime @default(now())
   accountId String
   account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   
@@ -41,6 +43,14 @@ model Page {
   id        String   @id @default(uuid())
   url       String
   sitecode  String?  // Overrides domain sitecode if present
+  createdAt DateTime @default(now())
+  
+  // Analysis Tracking
+  lastAnalyzedAt  DateTime?
+  lastAttemptedAt DateTime?
+  failureCount    Int       @default(0)
+  lastError       String?
+
   domainId  String
   domain    Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
 

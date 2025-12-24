@@ -5,6 +5,8 @@ import { runLighthouse, launchChrome } from './lighthouse/runLighthouse';
 import { parseBootupTime } from './lighthouse/parseBootupTime';
 import { mapScriptsToEntities } from './lighthouse/mapScriptsToEntities';
 import http from 'http';
+import { runtimeConfig } from './config/runtime';
+import os from 'os';
 
 // Start a dummy HTTP server to satisfy Render's port requirement
 const port = process.env.PORT || 3000;
@@ -17,7 +19,24 @@ http.createServer((req, res) => {
 
 const prisma = new PrismaClient();
 
+// Calculate concurrency
+// Reserve 512MB for OS/Node, then 1GB per Chrome
+const RESERVED_RAM = 512 * 1024 * 1024;
+const RAM_PER_CHROME = 1024 * 1024 * 1024; // 1GB approx
+const availableRam = os.totalmem();
+const dynamicConcurrency = Math.max(1, Math.floor((availableRam - RESERVED_RAM) / RAM_PER_CHROME));
+const concurrency = runtimeConfig.concurrency || dynamicConcurrency;
+
+console.log(`[Worker] Starting with concurrency: ${concurrency}`);
+
 const worker = new Worker('lighthouse-analysis', async job => {
+    if (runtimeConfig.pauseLighthouse) {
+        console.log('[Worker] Lighthouse paused via PAUSE_LIGHTHOUSE');
+        // Wait 4 minutes before retrying
+        await job.moveToDelayed(Date.now() + 4 * 60 * 1000, job.token);
+        return;
+    }
+
     if (job.data.cancelled) {
         console.log(`[Job ${job.id}] Job marked as cancelled in data. Skipping.`);
         return;
@@ -30,7 +49,7 @@ const worker = new Worker('lighthouse-analysis', async job => {
 
     console.log(`[Job ${job.id}] Processing job for ${job.data.url} (picked up from queue)`);
     
-    const { pageId, url, tool, scriptUrl, cookieConsentCode } = job.data;
+    const { pageId, url, tool, scriptUrl, cookieConsentCode, consentStrategy } = job.data;
     
     // 1. URL Normalization
     let targetUrl = url;
@@ -38,7 +57,10 @@ const worker = new Worker('lighthouse-analysis', async job => {
         targetUrl = `https://${targetUrl}`;
     }
 
-    const runs = process.env.NODE_ENV === 'production' ? 5 : 1;
+    const isProd = process.env.NODE_ENV === 'production';
+    // In Prod: 1 Probe + 5 Extra = 6 Total. In Dev: 1 Probe + 0 Extra = 1 Total.
+    const extraRuns = isProd ? 5 : 0;
+    
     let chrome;
     
     try {
@@ -54,14 +76,17 @@ const worker = new Worker('lighthouse-analysis', async job => {
         };
 
         // Helper function to perform a single run
-        const performRun = async (type: 'desktop' | 'mobile', useInjection: boolean) => {
+        const performRun = async (type: 'desktop' | 'mobile', useInjection: boolean, runCookieConsent: boolean) => {
             if (!(await job.isActive())) {
                 console.log(`[Job ${job.id}] Job cancelled.`);
                 throw new Error('Job cancelled');
             }
             
             const currentScriptUrl = useInjection ? scriptUrl : undefined;
-            const lhr = await runLighthouse(targetUrl, type, port, currentScriptUrl, cookieConsentCode);
+            // Only pass cookieConsentCode if runCookieConsent is true
+            const currentCookieConsent = runCookieConsent ? cookieConsentCode : undefined;
+            
+            const lhr = await runLighthouse(targetUrl, type, port, currentScriptUrl, currentCookieConsent, consentStrategy);
             const scripts = parseBootupTime(lhr, currentScriptUrl);
             const entities = mapScriptsToEntities(scripts);
             const cpuTime = entities[entityName]?.cpuTimeMs || 0;
@@ -71,8 +96,9 @@ const worker = new Worker('lighthouse-analysis', async job => {
 
         let desktopCpuTotal = 0;
         let mobileCpuTotal = 0;
+        let desktopRunsCount = 0;
+        let mobileRunsCount = 0;
         let useInjection = false;
-        let detected = false;
 
         const checkCancelled = async () => {
             // Check data flag first
@@ -81,12 +107,6 @@ const worker = new Worker('lighthouse-analysis', async job => {
                  throw new Error('Job cancelled');
             }
 
-            // We need to check if the job is still active in the queue
-            // job.isActive() returns true if the job is currently being processed by this worker
-            // BUT if we moved it to failed in the API, we need to detect that.
-            // The most reliable way is to check the job status from the queue, but we don't have the queue instance here easily.
-            // However, job.isActive() SHOULD return false if the job is no longer in the active set in Redis.
-            
             const isActive = await job.isActive();
             if (!isActive) {
                 console.log(`[Job ${job.id}] Job cancelled (isActive=false).`);
@@ -94,75 +114,86 @@ const worker = new Worker('lighthouse-analysis', async job => {
             }
         };
 
-        // Step 1: Probe Run (Run 1) - Natural Detection
-        console.log(`[Job ${job.id}] Starting Probe Run (Natural)...`);
+        // --- DESKTOP ANALYSIS ---
+        console.log(`[Job ${job.id}] Starting Desktop Probe Run...`);
         await checkCancelled();
-        await updateStatus('Starting Probe Run (Natural)...');
-        
-        // Desktop Probe
-        console.log(`Desktop Probe Run 1/${runs}`);
-        await checkCancelled();
-        await updateStatus(`Desktop Probe Run 1/${runs}`);
+        await updateStatus('Starting Desktop Probe Run...');
         await job.updateProgress(10);
-        const dProbe = await performRun('desktop', false);
         
-        // Mobile Probe
-        console.log(`Mobile Probe Run 1/${runs}`);
-        await checkCancelled();
-        await updateStatus(`Mobile Probe Run 1/${runs}`);
-        await job.updateProgress(20);
-        const mProbe = await performRun('mobile', false);
+        // Run cookie consent only on the first run (Probe)
+        const dProbe = await performRun('desktop', false, true);
+        desktopCpuTotal += dProbe.cpuTime;
+        desktopRunsCount++;
 
-        if (dProbe.hasTool || mProbe.hasTool) {
-            console.log(`[Job ${job.id}] Tool detected naturally.`);
-            await updateStatus('Tool detected naturally.');
-            detected = true;
-            desktopCpuTotal += dProbe.cpuTime;
-            mobileCpuTotal += mProbe.cpuTime;
-        } else {
-            console.log(`[Job ${job.id}] Tool NOT detected naturally.`);
-            if (scriptUrl) {
-                console.log(`[Job ${job.id}] Switching to injection mode.`);
-                await updateStatus('Tool NOT detected naturally. Switching to injection mode.');
-                useInjection = true;
-                // We discard the probe results because we want to measure WITH the script
+        let desktopDetected = dProbe.hasTool;
+        
+        if (desktopDetected) {
+            if (isProd) {
+                console.log(`[Job ${job.id}] Tool detected on Desktop (Natural). Running ${extraRuns} extra runs...`);
+                for (let i = 0; i < extraRuns; i++) {
+                    await checkCancelled();
+                    const msg = `Desktop Run ${i+2}/${extraRuns + 1}`;
+                    console.log(msg);
+                    await updateStatus(msg);
+                    await job.updateProgress(10 + Math.round(((i + 1) / extraRuns) * 20)); // 10-30%
+                    // No cookie consent for extra runs
+                    const res = await performRun('desktop', false, false);
+                    desktopCpuTotal += res.cpuTime;
+                    desktopRunsCount++;
+                }
             } else {
-                // No scriptUrl available, so we accept the 0s
-                await updateStatus('Tool NOT detected naturally. No script URL provided.');
-                desktopCpuTotal += dProbe.cpuTime;
-                mobileCpuTotal += mProbe.cpuTime;
+                console.log(`[Job ${job.id}] Tool detected on Desktop (Natural). Dev mode, skipping extra runs.`);
             }
+        } else {
+             console.log(`[Job ${job.id}] Tool NOT detected on Desktop. Skipping extra runs.`);
         }
 
-        // Step 2: Remaining Runs or Full Retry
-        const startRun = useInjection ? 0 : 1; // If injection, start from 0 (full retry). If natural, start from 1 (continue).
-        
-        // Desktop Loop
-        for (let i = startRun; i < runs; i++) {
+        // --- MOBILE ANALYSIS ---
+        try {
+            console.log(`[Job ${job.id}] Starting Mobile Probe Run...`);
             await checkCancelled();
-            const msg = `Desktop Run ${i+1}/${runs} ${useInjection ? '(Injection)' : ''}`;
-            console.log(msg);
-            await updateStatus(msg);
-            await job.updateProgress(30 + Math.round((i / runs) * 30));
-            const res = await performRun('desktop', useInjection);
-            desktopCpuTotal += res.cpuTime;
+            await updateStatus('Starting Mobile Probe Run...');
+            await job.updateProgress(50);
+
+            // Run cookie consent again for Mobile Probe (first run)
+            const mProbe = await performRun('mobile', false, true);
+            mobileCpuTotal += mProbe.cpuTime;
+            mobileRunsCount++;
+
+            let mobileDetected = mProbe.hasTool;
+
+            if (mobileDetected) {
+                if (isProd) {
+                    console.log(`[Job ${job.id}] Tool detected on Mobile (Natural). Running ${extraRuns} extra runs...`);
+                    for (let i = 0; i < extraRuns; i++) {
+                        await checkCancelled();
+                        const msg = `Mobile Run ${i+2}/${extraRuns + 1}`;
+                        console.log(msg);
+                        await updateStatus(msg);
+                        await job.updateProgress(50 + Math.round(((i + 1) / extraRuns) * 40)); // 50-90%
+                        // No cookie consent for extra runs
+                        const res = await performRun('mobile', false, false);
+                        mobileCpuTotal += res.cpuTime;
+                        mobileRunsCount++;
+                    }
+                } else {
+                    console.log(`[Job ${job.id}] Tool detected on Mobile (Natural). Dev mode, skipping extra runs.`);
+                }
+            } else {
+                 console.log(`[Job ${job.id}] Tool NOT detected on Mobile. Skipping extra runs.`);
+            }
+        } catch (mobileError: any) {
+            if (mobileError.message === 'Job cancelled') throw mobileError;
+            console.error(`[Job ${job.id}] Mobile analysis failed:`, mobileError);
+            await updateStatus(`Mobile analysis failed: ${mobileError.message}`);
+            // We continue to save whatever we have (Desktop results)
         }
 
-        // Mobile Loop
-        for (let i = startRun; i < runs; i++) {
-            await checkCancelled();
-            const msg = `Mobile Run ${i+1}/${runs} ${useInjection ? '(Injection)' : ''}`;
-            console.log(msg);
-            await updateStatus(msg);
-            await job.updateProgress(60 + Math.round((i / runs) * 30));
-            const res = await performRun('mobile', useInjection);
-            mobileCpuTotal += res.cpuTime;
-        }
+        const desktopAvg = desktopRunsCount > 0 ? desktopCpuTotal / desktopRunsCount : 0;
+        const mobileAvg = mobileRunsCount > 0 ? mobileCpuTotal / mobileRunsCount : 0;
+        const totalRuns = desktopRunsCount + mobileRunsCount;
 
-        const desktopAvg = runs > 0 ? desktopCpuTotal / runs : 0;
-        const mobileAvg = runs > 0 ? mobileCpuTotal / runs : 0;
-
-        console.log(`Job ${job.id} completed ${useInjection ? '(with injection)' : ''}. Desktop: ${desktopAvg}ms, Mobile: ${mobileAvg}ms`);
+        console.log(`Job ${job.id} completed. Desktop: ${desktopAvg}ms (${desktopRunsCount} runs), Mobile: ${mobileAvg}ms (${mobileRunsCount} runs)`);
         await updateStatus('Analysis Completed');
 
         if (await job.isActive()) {
@@ -177,7 +208,7 @@ const worker = new Worker('lighthouse-analysis', async job => {
                 update: {
                     desktopCpuAvg: desktopAvg,
                     mobileCpuAvg: mobileAvg,
-                    runCount: runs
+                    runCount: totalRuns
                 },
                 create: {
                     pageId,
@@ -185,7 +216,18 @@ const worker = new Worker('lighthouse-analysis', async job => {
                     tool,
                     desktopCpuAvg: desktopAvg,
                     mobileCpuAvg: mobileAvg,
-                    runCount: runs
+                    runCount: totalRuns
+                }
+            });
+
+            // Update Page status on success
+            await prisma.page.update({
+                where: { id: pageId },
+                data: {
+                    lastAnalyzedAt: new Date(),
+                    lastAttemptedAt: new Date(),
+                    failureCount: 0,
+                    lastError: null
                 }
             });
         }
@@ -199,6 +241,20 @@ const worker = new Worker('lighthouse-analysis', async job => {
         // Update status so user sees it
         await job.updateData({ ...job.data, statusMessage: `Error: ${error.message}` });
         
+        // Update Page with failure info
+        try {
+            await prisma.page.update({
+                where: { id: pageId },
+                data: {
+                    failureCount: { increment: 1 },
+                    lastError: error.message,
+                    lastAttemptedAt: new Date()
+                }
+            });
+        } catch (dbError) {
+            console.error(`[Job ${job.id}] Failed to update page failure status:`, dbError);
+        }
+
         throw error;
     } finally {
         if (chrome) {
@@ -206,6 +262,7 @@ const worker = new Worker('lighthouse-analysis', async job => {
         }
     }
 }, {
+    concurrency,
     connection: process.env.REDIS_URL ? {
         host: process.env.REDIS_HOST,
         port: parseInt(process.env.REDIS_PORT || '6379'),

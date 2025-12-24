@@ -73,3 +73,35 @@ You can add or modify entities in `src/entities.json`.
   }
 ]
 ```
+
+## Scheduler & Architecture
+
+### Smart Recurring Analysis
+The system includes a smart scheduler designed to analyze pages periodically without overloading the infrastructure.
+
+*   **Frequency**: Runs hourly to check for pages needing analysis.
+*   **Time Window**: Analyses are scheduled only between **00:00 and 09:00 (France Time)** or all day on **Weekends** to minimize impact during business hours.
+*   **Batching**: 
+    *   Calculates a daily target based on a **15-day cycle** (Total Pages / 15).
+    *   Clamped between `MIN_DAILY_BATCH` (1) and `MAX_DAILY_BATCH` (500) to prevent spikes.
+*   **Safety**:
+    *   **Queue Limits**: Checks queue size before adding new jobs.
+    *   **Kill Switches**: `DISABLE_SCHEDULER` stops new jobs; `PAUSE_LIGHTHOUSE` pauses execution.
+    *   **Failure Handling**: Retries failed pages with backoff; stops after 5 failures.
+
+### Technologies
+
+*   **Google Lighthouse (v12)**: The core analysis engine. It runs a full performance audit on a headless Chrome instance to extract CPU metrics (`bootup-time`).
+*   **Chrome Launcher**: Manages the lifecycle of the Chrome instance. It ensures a clean Chrome process is launched for each job and killed afterwards to prevent memory leaks.
+*   **Luxon**: A powerful library for date and time manipulation. Used by the scheduler to handle time zones (France Time) and complex date math for scheduling windows and cooldowns.
+*   **BullMQ & Redis**: Handles the job queue, ensuring reliable processing, retries, and concurrency management.
+
+### Monitoring
+
+*   **Logs**: The scheduler logs batch decisions and queue status. The worker logs concurrency levels and job outcomes.
+*   **API**: Query `getSchedulerMetrics` via GraphQL to see real-time queue stats (waiting, active, failed, etc.).
+
+### Environment Variables
+
+See `.env` files in `api/` and `worker/` for configuration options like `CONCURRENCY`, `MAX_DAILY_BATCH`, etc.
+

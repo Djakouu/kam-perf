@@ -13,6 +13,7 @@ export const GET_HIERARCHY = gql`
         sitecode
         selfHostingUrl
         cookieConsentCode
+        consentStrategy
         pages {
           id
           url
@@ -36,6 +37,44 @@ export const GET_JOB_STATUS = gql`
       progress
       failedReason
       message
+    }
+  }
+`;
+
+export const GET_ANALYTICS = gql`
+  query GetAnalytics($filters: FilterInput) {
+    getAnalytics(filters: $filters) {
+      summary {
+        id
+        label
+        totalAccounts
+        totalDomains
+        totalPages
+        domainsWith5PlusPages
+        domainsByCpu {
+          under500
+          between500And1000
+          between1000And2000
+          over2000
+        }
+      }
+      trends {
+        id
+        label
+        data {
+          date
+          totalAccounts
+          totalDomains
+          totalPages
+          domainsWith5PlusPages
+          domainsByCpu {
+            under500
+            between500And1000
+            between1000And2000
+            over2000
+          }
+        }
+      }
     }
   }
 `;

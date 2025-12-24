@@ -5,6 +5,7 @@ import { readFileSync } from 'fs';
 import { PrismaClient } from '@prisma/client';
 import { Queue, Job } from 'bullmq';
 import path from 'path';
+import { Scheduler } from './scheduler';
 
 const prisma = new PrismaClient();
 const analysisQueue = new Queue('lighthouse-analysis', {
@@ -36,6 +37,216 @@ const resolvers = {
             progress: typeof progress === 'number' ? progress : 0,
             failedReason,
             message: job.data.statusMessage || null
+        };
+    },
+    getSchedulerMetrics: async () => {
+        const counts = await analysisQueue.getJobCounts();
+        return counts;
+    },
+    getAnalytics: async (_: any, { filters }: any) => {
+        // 1. Build base filters
+        const accountWhere: any = {};
+        if (filters?.country) accountWhere.country = filters.country;
+        if (filters?.tamName) accountWhere.tamName = { contains: filters.tamName, mode: 'insensitive' };
+
+        const domainWhere: any = {};
+        if (filters?.sitecode) domainWhere.sitecode = { contains: filters.sitecode };
+
+        // 2. Fetch Hierarchy (Accounts -> Domains -> Pages)
+        const accounts = await prisma.account.findMany({
+            where: accountWhere,
+            include: {
+                domains: {
+                    where: domainWhere,
+                    include: {
+                        pages: true
+                    }
+                }
+            }
+        });
+
+        // Flatten to get all domains and pages for calculations
+        const allDomains = accounts.flatMap(a => a.domains);
+        const allPages = allDomains.flatMap(d => d.pages);
+        const allPageIds = allPages.map(p => p.id);
+
+        // 3. Fetch Analysis Data
+        const dateFilter: any = {};
+        if (filters?.dateRange) {
+            dateFilter.date = {
+                gte: new Date(filters.dateRange.start),
+                lte: new Date(filters.dateRange.end)
+            };
+        }
+
+        const analyses = await prisma.dailyAnalysis.findMany({
+            where: {
+                pageId: { in: allPageIds },
+                ...dateFilter
+            }
+        });
+
+        // --- SUMMARY CALCULATION ---
+        
+        const calculateCpuDist = (domainIds: string[], analysesSubset: any[]) => {
+            const dist = { under500: 0, between500And1000: 0, between1000And2000: 0, over2000: 0 };
+            
+            // Map pageId -> domainId
+            const pageToDomain = new Map<string, string>();
+            allDomains.forEach(d => d.pages.forEach(p => pageToDomain.set(p.id, d.id)));
+
+            const domainAvgs = new Map<string, { sum: number, count: number }>();
+
+            analysesSubset.forEach(a => {
+                const domainId = pageToDomain.get(a.pageId);
+                if (domainId && domainIds.includes(domainId)) {
+                    if (!domainAvgs.has(domainId)) domainAvgs.set(domainId, { sum: 0, count: 0 });
+                    const entry = domainAvgs.get(domainId)!;
+                    
+                    let val = 0;
+                    if (filters?.device === 'mobile') {
+                        val = a.mobileCpuAvg;
+                    } else {
+                        // Default to desktop
+                        val = a.desktopCpuAvg;
+                    }
+                    
+                    entry.sum += val;
+                    entry.count += 1;
+                }
+            });
+
+            domainAvgs.forEach((val) => {
+                const finalAvg = val.sum / val.count;
+                if (finalAvg < 500) dist.under500++;
+                else if (finalAvg < 1000) dist.between500And1000++;
+                else if (finalAvg < 2000) dist.between1000And2000++;
+                else dist.over2000++;
+            });
+
+            return dist;
+        };
+
+        const summaryRows = [];
+
+        // Row 1: All TAMs
+        const allTamRow = {
+            id: 'ALL',
+            label: 'All TAMs',
+            totalAccounts: accounts.length,
+            totalDomains: allDomains.length,
+            totalPages: allPages.length,
+            domainsWith5PlusPages: allDomains.filter(d => d.pages.length >= 5).length,
+            domainsByCpu: calculateCpuDist(allDomains.map(d => d.id), analyses)
+        };
+        summaryRows.push(allTamRow);
+
+        // Rows per TAM
+        const accountsByTam = new Map<string, typeof accounts>();
+        accounts.forEach(a => {
+            const tam = a.tamName || 'Unassigned';
+            if (!accountsByTam.has(tam)) accountsByTam.set(tam, []);
+            accountsByTam.get(tam)!.push(a);
+        });
+
+        for (const [tam, tamAccounts] of accountsByTam.entries()) {
+            const tamDomains = tamAccounts.flatMap(a => a.domains);
+            const tamPages = tamDomains.flatMap(d => d.pages);
+            
+            summaryRows.push({
+                id: tam,
+                label: tam,
+                totalAccounts: tamAccounts.length,
+                totalDomains: tamDomains.length,
+                totalPages: tamPages.length,
+                domainsWith5PlusPages: tamDomains.filter(d => d.pages.length >= 5).length,
+                domainsByCpu: calculateCpuDist(tamDomains.map(d => d.id), analyses)
+            });
+        }
+
+        // --- TRENDS CALCULATION ---
+        const trendsSeries = [];
+        
+        let startDate = filters?.dateRange ? new Date(filters.dateRange.start) : new Date();
+        let endDate = filters?.dateRange ? new Date(filters.dateRange.end) : new Date();
+        
+        if (!filters?.dateRange) {
+             const firstAnalysis = await prisma.dailyAnalysis.findFirst({ orderBy: { date: 'asc' } });
+             startDate = firstAnalysis ? firstAnalysis.date : new Date();
+             endDate = new Date();
+        }
+
+        // Helper to get days
+        const getDaysArray = (start: Date, end: Date) => {
+            const arr = [];
+            for(const dt=new Date(start); dt<=end; dt.setDate(dt.getDate()+1)){
+                arr.push(new Date(dt));
+            }
+            return arr;
+        };
+
+        const days = getDaysArray(startDate, endDate);
+
+        // Helper to calculate points for a set of accounts
+        const calculatePoints = (targetAccounts: typeof accounts) => {
+            const points = [];
+            const targetDomains = targetAccounts.flatMap(a => a.domains);
+            const targetPages = targetDomains.flatMap(d => d.pages);
+            const targetPageIds = targetPages.map(p => p.id);
+
+            for (const d of days) {
+                const dayStart = new Date(d);
+                dayStart.setHours(0,0,0,0);
+                const dayEnd = new Date(d);
+                dayEnd.setHours(23,59,59,999);
+                const dayStr = d.toISOString().split('T')[0];
+
+                const activeAccounts = targetAccounts.filter(a => a.createdAt <= dayEnd);
+                const activeDomains = targetDomains.filter(dom => dom.createdAt <= dayEnd);
+                const activePages = targetPages.filter(p => p.createdAt <= dayEnd);
+                
+                // Filter analyses for this day and these pages
+                const dayAnalyses = analyses.filter(a => 
+                    a.date.toISOString().split('T')[0] === dayStr && 
+                    targetPageIds.includes(a.pageId)
+                );
+
+                const domainsWith5Plus = activeDomains.filter(dom => {
+                    const domPages = activePages.filter(p => p.domainId === dom.id);
+                    return domPages.length >= 5;
+                }).length;
+
+                points.push({
+                    date: d,
+                    totalAccounts: activeAccounts.length,
+                    totalDomains: activeDomains.length,
+                    totalPages: activePages.length,
+                    domainsWith5PlusPages: domainsWith5Plus,
+                    domainsByCpu: calculateCpuDist(activeDomains.map(dom => dom.id), dayAnalyses)
+                });
+            }
+            return points;
+        };
+
+        // 1. "All TAMs" Series
+        trendsSeries.push({
+            id: 'ALL',
+            label: 'All TAMs',
+            data: calculatePoints(accounts)
+        });
+
+        // 2. Per-TAM Series
+        for (const [tam, tamAccounts] of accountsByTam.entries()) {
+            trendsSeries.push({
+                id: tam,
+                label: tam,
+                data: calculatePoints(tamAccounts)
+            });
+        }
+        
+        return {
+            summary: summaryRows,
+            trends: trendsSeries
         };
     },
     getHierarchy: async (_: any, { filters }: any) => {
@@ -428,6 +639,10 @@ const server = new ApolloServer({
 });
 
 async function start() {
+    // Start Scheduler
+    const scheduler = new Scheduler(analysisQueue);
+    scheduler.start();
+
     const { url } = await startStandaloneServer(server, {
         listen: { port: 4000 },
     });

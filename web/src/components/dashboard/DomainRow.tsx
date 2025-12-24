@@ -35,16 +35,19 @@ export function DomainRow({ domain, tool, filters }: DomainRowProps) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isAddPageModalOpen, setIsAddPageModalOpen] = useState(false);
 
-  const [updateDomain] = useMutation(UPDATE_DOMAIN, {
-    refetchQueries: ['GetHierarchy']
+  const [updateDomain, { loading: updating }] = useMutation(UPDATE_DOMAIN, {
+    refetchQueries: ['GetHierarchy'],
+    onCompleted: () => setIsEditModalOpen(false)
   });
 
-  const [deleteDomain] = useMutation(DELETE_DOMAIN, {
-    refetchQueries: ['GetHierarchy']
+  const [deleteDomain, { loading: deleting }] = useMutation(DELETE_DOMAIN, {
+    refetchQueries: ['GetHierarchy'],
+    onCompleted: () => setIsDeleteModalOpen(false)
   });
 
-  const [createPage] = useMutation(CREATE_PAGE, {
-    refetchQueries: ['GetHierarchy']
+  const [createPage, { loading: creatingPage }] = useMutation(CREATE_PAGE, {
+    refetchQueries: ['GetHierarchy'],
+    onCompleted: () => setIsAddPageModalOpen(false)
   });
 
   const handleUpdateDomain = (data: any) => {
@@ -62,7 +65,7 @@ export function DomainRow({ domain, tool, filters }: DomainRowProps) {
         id: domain.id
       }
     });
-    setIsDeleteModalOpen(false);
+    // setIsDeleteModalOpen(false);
   };
 
   const handleCreatePage = (data: any) => {
@@ -172,6 +175,7 @@ export function DomainRow({ domain, tool, filters }: DomainRowProps) {
           selfHostingUrl: (domain as any).selfHostingUrl,
           cookieConsentCode: (domain as any).cookieConsentCode
         }}
+        isLoading={updating}
       />
 
       <DeleteConfirmationModal
@@ -180,6 +184,7 @@ export function DomainRow({ domain, tool, filters }: DomainRowProps) {
         onConfirm={handleDeleteDomain}
         entityName={domain.name}
         entityType="Domain"
+        isLoading={deleting}
       />
 
       <PageModal
@@ -187,6 +192,7 @@ export function DomainRow({ domain, tool, filters }: DomainRowProps) {
         onClose={() => setIsAddPageModalOpen(false)}
         onSave={handleCreatePage}
         existingPages={domain.pages}
+        isLoading={creatingPage}
       />
     </div>
   );

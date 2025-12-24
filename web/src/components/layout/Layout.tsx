@@ -2,14 +2,19 @@ import React from 'react';
 import { LayoutDashboard, FileText, BarChart3, Lock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Tooltip } from '../ui/Tooltip';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentView: 'dashboard' | 'documentation';
-  onNavigate: (view: 'dashboard' | 'documentation') => void;
 }
 
-export function Layout({ children, currentView, onNavigate }: LayoutProps) {
+export function Layout({ children }: LayoutProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
+
+  const isActive = (path: string) => currentPath.startsWith(path);
+
   return (
     <div className="flex h-screen bg-neutral-100 font-sans text-neutral-900">
       {/* Sidebar */}
@@ -22,31 +27,24 @@ export function Layout({ children, currentView, onNavigate }: LayoutProps) {
           <NavItem 
             icon={<LayoutDashboard size={20} />} 
             label="Dashboard" 
-            active={currentView === 'dashboard'} 
-            onClick={() => onNavigate('dashboard')}
+            active={isActive('/dashboard')} 
+            onClick={() => navigate('/dashboard')}
           />
           
-          <div className="relative group">
-            <Tooltip content="Under construction" className="w-full block">
-              <div className="w-full">
-                <NavItem 
-                  icon={<BarChart3 size={20} />} 
-                  label="Analytics" 
-                  active={false}
-                  className="opacity-50 cursor-not-allowed"
-                />
-                <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-              </div>
-            </Tooltip>
-          </div>
+          <NavItem 
+            icon={<BarChart3 size={20} />} 
+            label="Analytics" 
+            active={isActive('/analytics')}
+            onClick={() => navigate('/analytics')}
+          />
         </nav>
 
         <div className="p-4 border-t border-neutral-700">
             <NavItem 
                 icon={<FileText size={20} />} 
                 label="Documentation" 
-                active={currentView === 'documentation'}
-                onClick={() => onNavigate('documentation')}
+                active={isActive('/documentation')}
+                onClick={() => navigate('/documentation')}
             />
         </div>
       </aside>

@@ -52,6 +52,7 @@ export const CREATE_DOMAIN = gql`
       sitecode
       selfHostingUrl
       cookieConsentCode
+      consentStrategy
     }
   }
 `;
@@ -64,6 +65,7 @@ export const UPDATE_DOMAIN = gql`
       sitecode
       selfHostingUrl
       cookieConsentCode
+      consentStrategy
     }
   }
 `;

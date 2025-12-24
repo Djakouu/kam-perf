@@ -15,6 +15,58 @@ type Query {
 
   # Check job status
   getJobStatus(jobId: ID!): JobProgress
+
+  # Scheduler Metrics
+  getSchedulerMetrics: SchedulerMetrics
+
+  # Analytics
+  getAnalytics(filters: FilterInput): AnalyticsResult!
+}
+
+type SchedulerMetrics {
+  waiting: Int
+  active: Int
+  completed: Int
+  failed: Int
+  delayed: Int
+  paused: Int
+}
+
+type AnalyticsResult {
+  summary: [AnalyticsSummaryRow!]!
+  trends: [AnalyticsTrendSeries!]!
+}
+
+type AnalyticsSummaryRow {
+  id: ID! # "ALL" or TAM name
+  label: String! # "All TAMs" or TAM Name
+  totalAccounts: Int!
+  totalDomains: Int!
+  totalPages: Int!
+  domainsWith5PlusPages: Int!
+  domainsByCpu: CpuDistribution!
+}
+
+type CpuDistribution {
+  under500: Int!
+  between500And1000: Int!
+  between1000And2000: Int!
+  over2000: Int!
+}
+
+type AnalyticsTrendSeries {
+  id: ID! # "ALL" or TAM name
+  label: String!
+  data: [AnalyticsTrendPoint!]!
+}
+
+type AnalyticsTrendPoint {
+  date: Date!
+  totalAccounts: Int!
+  totalDomains: Int!
+  totalPages: Int!
+  domainsWith5PlusPages: Int!
+  domainsByCpu: CpuDistribution!
 }
 
 type Mutation {
@@ -61,6 +113,7 @@ type Domain {
   sitecode: String
   selfHostingUrl: String
   cookieConsentCode: String
+  consentStrategy: String
   pages: [Page!]!
   
   # Aggregated stats
@@ -117,6 +170,7 @@ input FilterInput {
   sitecode: String
   minCpu: Float
   maxCpu: Float
+  device: String
 }
 
 input DateRangeInput {
@@ -142,6 +196,7 @@ input CreateDomainInput {
   sitecode: String
   selfHostingUrl: String
   cookieConsentCode: String
+  consentStrategy: String
 }
 
 input UpdateDomainInput {
@@ -149,6 +204,7 @@ input UpdateDomainInput {
   sitecode: String
   selfHostingUrl: String
   cookieConsentCode: String
+  consentStrategy: String
 }
 
 input CreatePageInput {

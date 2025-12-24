@@ -37,16 +37,19 @@ export function AccountRow({ account, tool, forceExpand, filters }: AccountRowPr
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isAddDomainModalOpen, setIsAddDomainModalOpen] = useState(false);
 
-  const [updateAccount] = useMutation(UPDATE_ACCOUNT, {
-    refetchQueries: ['GetHierarchy']
+  const [updateAccount, { loading: updating }] = useMutation(UPDATE_ACCOUNT, {
+    refetchQueries: ['GetHierarchy'],
+    onCompleted: () => setIsEditModalOpen(false)
   });
 
-  const [deleteAccount] = useMutation(DELETE_ACCOUNT, {
-    refetchQueries: ['GetHierarchy']
+  const [deleteAccount, { loading: deleting }] = useMutation(DELETE_ACCOUNT, {
+    refetchQueries: ['GetHierarchy'],
+    onCompleted: () => setIsDeleteModalOpen(false)
   });
 
-  const [createDomain] = useMutation(CREATE_DOMAIN, {
-    refetchQueries: ['GetHierarchy']
+  const [createDomain, { loading: creatingDomain }] = useMutation(CREATE_DOMAIN, {
+    refetchQueries: ['GetHierarchy'],
+    onCompleted: () => setIsAddDomainModalOpen(false)
   });
 
   // Sync with forceExpand if it changes
@@ -72,7 +75,7 @@ export function AccountRow({ account, tool, forceExpand, filters }: AccountRowPr
         id: account.id
       }
     });
-    setIsDeleteModalOpen(false);
+    // setIsDeleteModalOpen(false); // Handled by onCompleted
   };
 
   const handleCreateDomain = (data: any) => {
@@ -184,6 +187,7 @@ export function AccountRow({ account, tool, forceExpand, filters }: AccountRowPr
           country: account.country,
           tamName: account.tamName
         }}
+        isLoading={updating}
       />
 
       <DeleteConfirmationModal
@@ -192,6 +196,7 @@ export function AccountRow({ account, tool, forceExpand, filters }: AccountRowPr
         onConfirm={handleDeleteAccount}
         entityName={account.name}
         entityType="Account"
+        isLoading={deleting}
       />
 
       <DomainModal
@@ -199,6 +204,7 @@ export function AccountRow({ account, tool, forceExpand, filters }: AccountRowPr
         onClose={() => setIsAddDomainModalOpen(false)}
         onSave={handleCreateDomain}
         existingDomains={account.domains}
+        isLoading={creatingDomain}
       />
     </div>
   );

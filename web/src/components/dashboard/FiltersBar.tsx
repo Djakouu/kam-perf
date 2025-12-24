@@ -13,11 +13,13 @@ interface FiltersBarProps {
     tamName: string;
     sitecode: string;
     cpuTime: string;
+    device?: string;
   };
   onFilterChange: (key: string, value: string) => void;
+  showDeviceFilter?: boolean;
 }
 
-export function FiltersBar({ filters, onFilterChange }: FiltersBarProps) {
+export function FiltersBar({ filters, onFilterChange, showDeviceFilter }: FiltersBarProps) {
   // Local state for debouncing text inputs
   const [localSearch, setLocalSearch] = useState(filters.search);
   const [localTamName, setLocalTamName] = useState(filters.tamName);
@@ -52,6 +54,19 @@ export function FiltersBar({ filters, onFilterChange }: FiltersBarProps) {
 
   return (
     <div className="bg-white border-b border-neutral-200 px-8 py-4 flex flex-wrap gap-4 items-center">
+      {showDeviceFilter && (
+          <div className="w-32 relative">
+            <Select
+              value={filters.device || 'desktop'}
+              onChange={(value) => onFilterChange('device', value)}
+              placeholder="Device"
+              options={[
+                { value: "desktop", label: "Desktop" },
+                { value: "mobile", label: "Mobile" },
+              ]}
+            />
+          </div>
+        )}
       <div className="flex-1 min-w-[200px]">
         <Input 
           placeholder="Account or Domain" 
@@ -116,6 +131,8 @@ export function FiltersBar({ filters, onFilterChange }: FiltersBarProps) {
             ]}
           />
         </div>
+
+        
       </div>
     </div>
   );

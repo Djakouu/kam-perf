@@ -43,12 +43,14 @@ export function PageRow({ page, tool, filters }: PageRowProps) {
   const isAnalyzingThisRow = activePageId === page.id;
   const isAnalyzingOther = !!activeJobId && !isAnalyzingThisRow;
 
-  const [updatePage, { client }] = useMutation(UPDATE_PAGE, {
-    refetchQueries: ['GetHierarchy']
+  const [updatePage, { client, loading: updating }] = useMutation(UPDATE_PAGE, {
+    refetchQueries: ['GetHierarchy'],
+    onCompleted: () => setIsEditModalOpen(false)
   });
 
-  const [deletePage] = useMutation(DELETE_PAGE, {
-    refetchQueries: ['GetHierarchy']
+  const [deletePage, { loading: deleting }] = useMutation(DELETE_PAGE, {
+    refetchQueries: ['GetHierarchy'],
+    onCompleted: () => setIsDeleteModalOpen(false)
   });
 
   const [triggerAnalysis] = useMutation(TRIGGER_ANALYSIS, {
@@ -129,7 +131,7 @@ export function PageRow({ page, tool, filters }: PageRowProps) {
         id: page.id
       }
     });
-    setIsDeleteModalOpen(false);
+    // setIsDeleteModalOpen(false);
   };
 
   const handleRunAnalysis = () => {
@@ -300,6 +302,7 @@ export function PageRow({ page, tool, filters }: PageRowProps) {
           url: page.url,
           sitecode: page.sitecode
         }}
+        isLoading={updating}
       />
 
       <DeleteConfirmationModal
@@ -308,6 +311,7 @@ export function PageRow({ page, tool, filters }: PageRowProps) {
         onConfirm={handleDeletePage}
         entityName={page.url}
         entityType="Page"
+        isLoading={deleting}
       />
 
       <AnalysisResultModal

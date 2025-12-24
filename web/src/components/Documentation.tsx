@@ -39,7 +39,7 @@ export function Documentation() {
                                 When you start an analysis for a page:
                             </p>
                             <ol className="list-decimal list-inside space-y-2 ml-4">
-                                <li>The system runs Lighthouse <strong>5 times</strong>.</li>
+                                <li>The system runs Lighthouse <strong>6 times</strong> in order to normalize the average CPU time and ensure balanced testing when 2–3 variations are active, with each variation measured 2–3 times.</li>
                                 <li>The average CPU time is calculated and set as the result for that day.</li>
                                 <li>If multiple analyses are run on the same day, only the most recent one is kept.</li>
                             </ol>
@@ -52,9 +52,9 @@ export function Documentation() {
                                 The analysis follows this logic:
                             </p>
                             <ul className="list-disc list-inside space-y-2 ml-4">
-                                <li>First, it runs once for Desktop and once for Mobile to detect the script naturally.</li>
-                                <li>If the script is <strong>not detected</strong> (CPU time = 0ms), the system will automatically <strong>inject</strong> the configured script.</li>
-                                <li>It then runs the full 5-run analysis for each device with the injected script.</li>
+                                <li>If user consent is required for variations to be displayed, the script programmatically clicks the cookie acceptance button using its provided selector and refreshes the page. If variations are already displayed without consent, this step is skipped.</li>
+                                <li>it runs once for Desktop and once for Mobile to detect the script naturally. If the url for self-hosting is provided for the domain, the analysis wll be based on that url instead of the kameleoon script url</li>
+                                <li>It then performs the five additional Lighthouse runs per device using the injected script.</li>
                             </ul>
                         </div>
                     </section>
@@ -99,9 +99,64 @@ export function Documentation() {
                                 <strong>Mobile vs Desktop:</strong> Mobile CPU time is typically higher because Lighthouse emulates a mid-range mobile device (Moto G4) with CPU throttling, whereas Desktop runs with less throttling.
                             </li>
                             <li>
+                                <strong>Blocked Sites (403 Forbidden):</strong> Some websites (e.g., fnac.com) have security measures that block automated tools like Lighthouse. If you see a "Status code: 403" error, it means the site is actively blocking the analysis request on one or both devices.
+                            </li>
+                            <li>
                                 <strong>Filters:</strong> Use the filters bar to narrow down the view. When filtering by date, the graphs and averages will only reflect data within the selected range.
                             </li>
                         </ul>
+                    </section>
+
+                    <section className="mb-8">
+                        <h2 className="text-xl font-semibold text-neutral-800 mb-3">Scheduler & Automation</h2>
+                        <p className="text-neutral-600 mb-4">
+                            The system includes a smart scheduler designed to analyze pages periodically without overloading the infrastructure.
+                        </p>
+                        <div className="space-y-4 text-neutral-600">
+                            <h3 className="text-lg font-medium text-neutral-800">How it works</h3>
+                            <ul className="list-disc list-inside space-y-2 ml-4">
+                                <li><strong>Frequency:</strong> The scheduler runs hourly to check for pages that need analysis.</li>
+                                <li><strong>Time Window:</strong> Analyses are only scheduled between <strong>00:00 and 09:00 (France Time)</strong> or all day on <strong>Weekends</strong>. This minimizes impact during business hours.</li>
+                                <li><strong>Smart Batching:</strong> The system calculates a daily target to ensure all pages are analyzed roughly every <strong>15 days</strong>. It automatically caps the number of daily analyses (max 500) to prevent spikes.</li>
+                                <li><strong>Safety:</strong> The scheduler checks the queue size before adding new jobs and includes "kill switches" to stop processing if needed. Failed pages are retried with a backoff strategy and stopped after 5 failures.</li>
+                            </ul>
+                        </div>
+                    </section>
+
+                    <section className="mb-8">
+                        <h2 className="text-xl font-semibold text-neutral-800 mb-3">Technologies Used</h2>
+                        <div className="grid grid-cols-1 gap-4 mt-4">
+                            <div className="bg-neutral-50 p-4 rounded-md border border-neutral-200">
+                                <h3 className="font-medium text-neutral-900 mb-1">Google Lighthouse (v12)</h3>
+                                <p className="text-sm text-neutral-600">
+                                    The core analysis engine. It runs a full performance audit on a headless Chrome instance to extract CPU metrics (specifically the <code>bootup-time</code> audit).
+                                </p>
+                            </div>
+                            <div className="bg-neutral-50 p-4 rounded-md border border-neutral-200">
+                                <h3 className="font-medium text-neutral-900 mb-1">Luxon</h3>
+                                <p className="text-sm text-neutral-600">
+                                    A powerful library for date and time manipulation. It handles the complex logic for the scheduler's time windows (France Time zone), daily batch calculations, and retry cooldowns to ensure reliable and safe scheduling.
+                                </p>
+                            </div>
+                            <div className="bg-neutral-50 p-4 rounded-md border border-neutral-200">
+                                <h3 className="font-medium text-neutral-900 mb-1">Chrome Launcher</h3>
+                                <p className="text-sm text-neutral-600">
+                                    Manages the lifecycle of the Chrome instance. It ensures a clean Chrome process is launched for each job and properly killed afterwards to prevent memory leaks.
+                                </p>
+                            </div>
+                            <div className="bg-neutral-50 p-4 rounded-md border border-neutral-200">
+                                <h3 className="font-medium text-neutral-900 mb-1">BullMQ</h3>
+                                <p className="text-sm text-neutral-600">
+                                    A robust, Redis-based job queue for Node.js. It handles the scheduling, processing, and retrying of analysis jobs, ensuring reliability even under heavy load.
+                                </p>
+                            </div>
+                            <div className="bg-neutral-50 p-4 rounded-md border border-neutral-200">
+                                <h3 className="font-medium text-neutral-900 mb-1">Puppeteer</h3>
+                                <p className="text-sm text-neutral-600">
+                                    A Node.js library which provides a high-level API to control Chrome. Used here for advanced interactions like handling cookie consent banners and injecting scripts before the Lighthouse audit runs.
+                                </p>
+                            </div>
+                        </div>
                     </section>
                 </div>
             </div>
